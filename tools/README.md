@@ -1,34 +1,38 @@
 # tools
 
-bantoのスクリプト群。事実を確定させる処理（抽出・照合・出力）だけを受け持ち、どれが正かは決めない。
+bantoのスクリプト群。**事実を確定させる処理（抽出・照合・出力）だけを受け持ち、どれが正かは決めない。**
+起動は `scripts/banto.py`（この `tools/` を読み込み先に加えて `banto` パッケージを動かす）。
 
-## import-tables
+## 構成
 
-```
-cd tools
-python -m banto import-tables <対象プロジェクトのパス>
-```
-
-対象プロジェクトの `banto/sources.json` に情報源を列挙しておく。対応する情報源の種類:
-
-| kind | 内容 |
+| モジュール | 役割 |
 |---|---|
-| `xlsx` | Excel設計書の「テーブル: 名前」＋「カラム / 型 / 制約」表（`sheet` を指定） |
-| `md` | MD設計書の見出し（`テーブル名`）直下の「カラム / 型 / 制約」表 |
-| `ddl` | CREATE TABLE / ALTER TABLE / CREATE INDEX（`dialect`: h2・mysql・postgres） |
-| `jpa` | JPAエンティティ（Java）の注釈 |
+| `model.py` | 情報源から取り出した事実の共通の形（コンテナ／項目／属性） |
+| `domains/` | 領域ごとの属性の定義と値の書き方（`tables` テーブル定義、`tests` テスト） |
+| `extract/` | 情報源ごとの抽出器（`ddl` `md` `xlsx` `jpa` `mdtests` `junit` `surefire`） |
+| `engine.py` | 同期：事実・台帳・判断を照らし合わせ、ずれの状態（open / decided / resolved）を更新する |
+| `ledger.py` | 台帳MDの読み書き（原本として読み戻す） |
+| `decisions.py` | 判断の記録（DEC）の読み書き |
+| `writer.py` | 台帳・判断票・一覧・直し待ちリストの書き出し（同じ入力なら同じ出力） |
+| `excel.py` / `review_io.py` | Excel清書、レビュー表の出力と取り込み |
+| `check.py` | 整合の検査（IDの鎖、記録の誤り） |
+| `state.py` | 採番表・ずれの登録簿・適用済みの判断（`banto/state/`） |
+| `fio.py` | 読み書き（UTF-8・改行LFに統一。Windowsでも出力が変わらない） |
 
-出力（対象プロジェクトの `banto/` 配下）:
+## 守っていること
 
-- `extracted/tables.json` — 取り出した事実
-- `design/detail/tables/*.md` — テーブル定義（一致した部分と、未判断のずれへの参照）
-- `drifts/DRF-*.md` — 判断票
-- `drifts/README.md` — ずれの一覧（グループ別）
+- **書かれていないことは、違うことではない**：情報源が表していない属性は比較しない
+- **同じ入力からは同じ出力**：日時など揺れる値は台帳・判断票に書かない。変わったファイルだけ書き換える
+- **台帳は人も書ける**：機械が読むのは `<!-- banto:... -->` の直後の表だけ。メモや補足欄は残す
 
-必要なもの: Python 3.10以上、openpyxl。
+## 新しい情報源を足すとき
 
-### 既知の限界
+1. `extract/` に抽出器を書く（`Source.container()` / `Container.item()` / `Item.set(属性, 正規化した値, 書かれ方, 場所)`）
+2. `domains/<領域>.py` の `extract()` に kind を足す
+3. `tests/test_banto.py` に、架空のプロジェクトでの抽出と同期のテストを足す
 
-- JPAは注釈だけを読む。Validatorクラスなどのコードで実装された必須チェックは拾わない
+## 既知の限界（v0.1）
+
+- JPAは注釈だけを読む。Validatorクラスなどのコードで実装された必須チェックは拾わない（照合係の推定で補う）
 - MySQLの大文字小文字の区別は照合順序で決まるため、DDLの表記からは判定しない
-- 再実行でずれの件数が減ると、古い判断票ファイルが残る
+- DDLは CREATE TABLE を中心に読む。差分マイグレーション（ALTER の積み重ね）の再構成は未対応

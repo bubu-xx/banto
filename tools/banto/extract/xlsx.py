@@ -1,23 +1,21 @@
 """Excel設計書から、「テーブル: 名前」行に続く「カラム / 型 / 制約」表を取り出す。"""
-import openpyxl
 from .doc import add_column
-from ..model import Source
+
+NAME_HEADERS = ("カラム", "列", "列名", "カラム名")
 
 
-def extract(src: Source, path, sheet, dialect=None):
-    wb = openpyxl.load_workbook(path, data_only=True)
-    ws = wb[sheet]
+def extract(src, path, sheet, dialect=None):
+    import openpyxl  # Excelの情報源があるときだけ必要
+    ws = openpyxl.load_workbook(path, data_only=True)[sheet]
     rows = list(ws.iter_rows())
     i = 0
     while i < len(rows):
         a = rows[i][0]
         v = str(a.value or "")
         if v.startswith(("テーブル:", "テーブル：")):
-            tname = v.split(":", 1)[-1].split("：", 1)[-1].strip().lower()
-            t = src.table(tname, f"{src.path}!{sheet}!{a.coordinate}")
-            # 見出し行（カラム）を探す
+            t = src.container(v.replace("：", ":").split(":", 1)[1].strip().lower(), f"{src.path}!{sheet}!{a.coordinate}")
             j = i + 1
-            while j < len(rows) and str(rows[j][0].value or "").strip() not in ("カラム", "列", "列名", "カラム名"):
+            while j < len(rows) and str(rows[j][0].value or "").strip() not in NAME_HEADERS:
                 j += 1
             j += 1
             while j < len(rows) and rows[j][0].value not in (None, ""):

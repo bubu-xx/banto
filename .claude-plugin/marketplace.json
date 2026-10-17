@@ -1,0 +1,12 @@
+{
+  "name": "banto",
+  "owner": { "name": "bubu-xx" },
+  "description": "banto（番頭）— 成果物の帳簿を預かり、合わないところと経緯を揃えて差し出すプラグイン",
+  "plugins": [
+    {
+      "name": "banto",
+      "source": "./",
+      "description": "成果物の関係をMDの台帳で管理し、ずれを判断票にする。Excel清書とレビュー往復つき。"
+    }
+  ]
+}

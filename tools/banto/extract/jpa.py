@@ -8,7 +8,7 @@
 """
 import os
 import re
-from ..model import Source
+from .. import fio
 
 SIMPLE = {"Integer": "integer", "int": "integer", "Long": "integer", "long": "integer",
           "String": "string", "LocalDate": "date", "Date": "date", "LocalDateTime": "datetime"}
@@ -24,7 +24,7 @@ def _arg(ann, key):
 
 
 def _parse_file(path, rel):
-    lines = open(path, encoding="utf-8").read().splitlines()
+    lines = fio.read(path).splitlines()
     cls, pending, fields = None, [], []
     i = 0
     while i < len(lines):
@@ -53,7 +53,7 @@ def _parse_file(path, rel):
     return cls
 
 
-def extract(src: Source, root, base_dir):
+def extract(src, root, base_dir):
     classes = {}
     for dp, _, fs in os.walk(root):
         for f in sorted(fs):
@@ -80,7 +80,7 @@ def extract(src: Source, root, base_dir):
         return out
 
     for n, ent in sorted(entities.items()):
-        t = src.table(table_of[n], f"{ent['path']}:{ent['line']}")
+        t = src.container(table_of[n], f"{ent['path']}:{ent['line']}")
         for k in chain(ent):
             for f in k["fields"]:
                 _field(src, t, n, f, k["path"], table_of)
@@ -95,7 +95,7 @@ def _field(src, t, owner, f, path, table_of):
     if "ManyToOne" in anns or "OneToOne" in anns:
         jc = anns.get("JoinColumn", ("", 0))[0]
         name = (_arg(jc, "name") or snake(f["name"]) + "_id").lower()
-        c = t.col(name, loc)
+        c = t.item(name, loc)
         c.set("base_type", "integer", f"{f['type']} {f['name']}（@ManyToOne）")
         if elem in table_of:
             c.set("fk", f"{table_of[elem]}.id", f"@ManyToOne → {table_of[elem]}.id")
@@ -104,8 +104,8 @@ def _field(src, t, owner, f, path, table_of):
         jc = anns.get("JoinColumn")
         if jc and elem in table_of:
             name = _arg(jc[0], "name").lower()
-            other = src.table(table_of[elem], loc)
-            c = other.col(name, f"{path}:{jc[1]}")
+            other = src.container(table_of[elem], loc)
+            c = other.item(name, f"{path}:{jc[1]}")
             c.set("base_type", "integer", f"@OneToMany @JoinColumn(name=\"{name}\")（{owner}.{f['name']}）")
             c.set("fk", f"{t.name}.id", f"@OneToMany @JoinColumn → {t.name}.id")
         return
@@ -115,9 +115,9 @@ def _field(src, t, owner, f, path, table_of):
             a = jt[0]
             jname = _arg(a, "name").lower()
             jcols = re.findall(r"@JoinColumn\(\s*name\s*=\s*\"(\w+)\"", a)
-            jtab = src.table(jname, f"{path}:{jt[1]}")
+            jtab = src.container(jname, f"{path}:{jt[1]}")
             for cname, tgt in zip(jcols, [t.name, table_of[elem]]):
-                c = jtab.col(cname.lower(), f"{path}:{jt[1]}")
+                c = jtab.item(cname.lower(), f"{path}:{jt[1]}")
                 c.set("base_type", "integer", f"@JoinTable({jname}).{cname}")
                 c.set("fk", f"{tgt}.id", f"@JoinTable → {tgt}.id")
         return
@@ -126,8 +126,9 @@ def _field(src, t, owner, f, path, table_of):
 
     col_ann = anns.get("Column", ("", 0))[0]
     name = (_arg(col_ann, "name") or snake(f["name"])).lower()
-    c = t.col(name, loc)
+    c = t.item(name, loc)
     c.set("base_type", SIMPLE[f["type"]], f"{f['type']} {f['name']}")
+    c.set("fk", "", "関連の注釈なし")
     if "Id" in anns:
         c.set("pk", True, "@Id")
         c.set("nullable", False, "@Id")

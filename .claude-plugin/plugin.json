@@ -1,0 +1,8 @@
+{
+  "name": "banto",
+  "version": "0.1.0",
+  "description": "成果物（設計書・DB定義・コード・テスト）の関係をMDの台帳で管理し、ずれを人が判断するための判断票にする。Excel清書とレビュー往復つき。",
+  "author": { "name": "bubu-xx" },
+  "repository": "https://github.com/bubu-xx/banto",
+  "keywords": ["design-document", "traceability", "drift", "excel", "review", "japanese"]
+}
