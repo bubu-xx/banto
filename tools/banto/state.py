@@ -22,6 +22,7 @@ class State:
         self.ids = self._load("ids.json", {"containers": {}, "items": {}, "counters": {}})
         self.drifts = self._load("drifts.json", {})        # key -> {id, status, decision?, value?}
         self.applied = self._load("applied.json", [])      # 台帳に適用済みの DEC-ID
+        self.coverage = self._load("coverage.json", {})    # 様式の項目ID -> {decision, applicable}
 
     def _load(self, name, default):
         p = os.path.join(self.dir, name)
@@ -31,7 +32,8 @@ class State:
 
     def save(self):
         os.makedirs(self.dir, exist_ok=True)
-        for name, obj in (("ids.json", self.ids), ("drifts.json", self.drifts), ("applied.json", sorted(self.applied))):
+        for name, obj in (("ids.json", self.ids), ("drifts.json", self.drifts), ("applied.json", sorted(self.applied)),
+                          ("coverage.json", self.coverage)):
             text = json.dumps(obj, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
             p = os.path.join(self.dir, name)
             if not os.path.exists(p) or fio.read(p) != text:

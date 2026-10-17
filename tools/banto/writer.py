@@ -107,7 +107,9 @@ def write_ledger(res, dname, ledger, by_key):
             L += ["<!-- banto:attrs -->", "| 属性 | 値 |", "|---|---|"]
             for a in cattrs:
                 v = lc.attrs.get(a.name)
-                L.append(f"| {a.label} | {a.show(v) if v is not None else '?'}{_marker(by_key.get(keyf(None, a.name)), ddir)} |")
+                d = by_key.get(keyf(None, a.name))
+                txt = a.show(v) if v is not None else ("?" if d and d.status != "resolved" else a.show(None))
+                L.append(f"| {a.label} | {txt}{_marker(d, ddir)} |")
             L.append("")
         iattrs = dom.item_attrs()
         head = ["ID", dom.item_label] + [a.label for a in iattrs] + list(dom.free_columns) + ["状態"]

@@ -23,7 +23,12 @@ def import_file(project, path):
     ws = wb["レビュー表"]
     header_row = next(r for r in range(1, 10) if ws.cell(row=r, column=1).value == "指摘No")
     heads = {ws.cell(row=header_row, column=c).value: c for c in range(1, ws.max_column + 1)}
-    targets = State(base).by_target_id()
+    targets = dict(State(base).by_target_id())
+    try:
+        from . import formats, project as PJ
+        targets.update({k: None for k in formats.item_ids(formats.load(base, PJ.load(base).get("format", "standard")))})
+    except FileNotFoundError:
+        pass
     out, warns = [], []
     for r in range(header_row + 1, ws.max_row + 1):
         rec = {}

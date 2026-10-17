@@ -51,6 +51,8 @@ class Result:
     drifts: list
     errors: list
     decisions: list
+    coverage: list = field(default_factory=list)
+    format: dict = field(default_factory=dict)
 
 
 def load_config(project):
@@ -164,6 +166,10 @@ def _same(a, b):
 def sync(project, write=True, extra_decisions=None):
     from . import writer, reviews
     base = os.path.join(project, "banto")
+    from . import project as PJ
+    from .domains import configure
+    cfg = PJ.load(base)
+    configure(cfg)
     state = State(base)
     sources = extract_all(project)
     ledgers = {d: LG.load_all(base, DOMAINS[d].DOMAIN) for d in sources}
@@ -249,8 +255,16 @@ def sync(project, write=True, extra_decisions=None):
         d.id = state.drifts[d.key]["id"] = state.drift_id()
     drifts.sort(key=lambda d: (int(d.id.split("-")[1])))
     res = Result(project, base, state, sources, ledgers, drifts, errors, decs)
+    from . import coverage
+    try:
+        res.coverage = coverage.compute(res, write=write)
+    except FileNotFoundError as e:
+        res.coverage = []
+        errors.append(str(e))
     if write:
         writer.write_all(res)
+        if res.coverage:
+            coverage.write(res, res.coverage)
         state.save()
     return res
 
@@ -258,6 +272,11 @@ def sync(project, write=True, extra_decisions=None):
 def _apply_decision(dec, doms, state, by_id, by_target):
     if dec.action not in D.ACTIONS:
         raise ValueError(f"action が不明: {dec.action}")
+    if dec.action in ("exclude", "include"):
+        if not dec.target:
+            raise ValueError("対象の項目（target）がない")
+        state.coverage[dec.target] = {"decision": dec.id, "applicable": dec.action == "include"}
+        return
     if dec.action in ("set", "allow"):
         if not dec.drifts:
             raise ValueError("対象のずれ（drifts）がない")

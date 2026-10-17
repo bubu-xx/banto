@@ -7,6 +7,8 @@ action:
   accept  … レビュー指摘を受け入れる（target・attr・value があれば台帳を直す）
   reject  … レビュー指摘を受け入れない
   answer  … レビュー指摘（質問）に回答する
+  exclude … 様式の項目を、このシステムには不要と判断する（target に項目ID）
+  include … 様式の項目を、手がかりがなくても必要と判断する（target に項目ID）
 """
 import datetime
 import os
@@ -14,7 +16,7 @@ from dataclasses import dataclass, field
 from . import frontmatter
 from . import fio, frontmatter
 
-ACTIONS = ("set", "allow", "accept", "reject", "answer")
+ACTIONS = ("set", "allow", "accept", "reject", "answer", "exclude", "include")
 
 
 @dataclass

@@ -1,0 +1,659 @@
+{
+ "name": "standard",
+ "title": "banto標準様式",
+ "description": "日本のSIで一般的な基本設計書・詳細設計書・テーブル定義書・テスト仕様書の構成。案件に該当しない項目は、根拠を確かめて「不要」と判断する。",
+ "documents": [
+  {
+   "id": "BD",
+   "title": "基本設計書",
+   "items": [
+    {
+     "id": "BD-01",
+     "title": "システム概要",
+     "kind": "text",
+     "hint": "目的・背景、対象範囲（範囲外も明記）、前提条件・制約",
+     "how": "人が書く"
+    },
+    {
+     "id": "BD-02",
+     "title": "システム構成",
+     "kind": "text",
+     "hint": "全体構成、利用者、接続する外部システム、稼働環境",
+     "how": "人が書く"
+    },
+    {
+     "id": "BD-03",
+     "title": "業務フロー",
+     "kind": "text",
+     "hint": "対象業務の流れ（To-Be）と、システムが担う部分",
+     "how": "人が書く"
+    },
+    {
+     "id": "BD-04",
+     "title": "機能一覧",
+     "kind": "manual-table",
+     "columns": [
+      "機能ID",
+      "機能名",
+      "概要",
+      "対応要件",
+      "利用者"
+     ],
+     "required": [
+      "機能ID",
+      "機能名",
+      "概要"
+     ],
+     "hint": "システムが提供する機能。要件との対応を書く",
+     "how": "人が書く"
+    },
+    {
+     "id": "BD-05",
+     "title": "画面一覧",
+     "kind": "manual-table",
+     "columns": [
+      "画面ID",
+      "画面名",
+      "概要",
+      "URL",
+      "利用者"
+     ],
+     "required": [
+      "画面ID",
+      "画面名",
+      "URL"
+     ],
+     "hint": "利用者が操作する画面",
+     "how": "画面テンプレート・コントローラから下書きし、人が確認する",
+     "signals": [
+      {
+       "glob": "**/templates/**/*.html",
+       "label": "画面テンプレート（templates/*.html）"
+      },
+      {
+       "glob": "**/*.jsp",
+       "label": "JSP"
+      },
+      {
+       "glob": "**/*.vue",
+       "label": "Vueコンポーネント"
+      },
+      {
+       "glob": "**/*.tsx",
+       "label": "React（.tsx）"
+      },
+      {
+       "grep": "@Controller\\b",
+       "files": "**/main/**/*.java",
+       "label": "画面コントローラ（@Controller）"
+      }
+     ]
+    },
+    {
+     "id": "BD-06",
+     "title": "画面遷移",
+     "kind": "text",
+     "hint": "画面間の遷移と、遷移の条件",
+     "how": "コントローラの遷移先から下書きし、人が確認する",
+     "signals": [
+      {
+       "glob": "**/templates/**/*.html",
+       "label": "画面テンプレート（templates/*.html）"
+      },
+      {
+       "glob": "**/*.jsp",
+       "label": "JSP"
+      },
+      {
+       "glob": "**/*.vue",
+       "label": "Vueコンポーネント"
+      },
+      {
+       "glob": "**/*.tsx",
+       "label": "React（.tsx）"
+      },
+      {
+       "grep": "@Controller\\b",
+       "files": "**/main/**/*.java",
+       "label": "画面コントローラ（@Controller）"
+      }
+     ]
+    },
+    {
+     "id": "BD-07",
+     "title": "帳票一覧",
+     "kind": "manual-table",
+     "columns": [
+      "帳票ID",
+      "帳票名",
+      "出力契機",
+      "形式"
+     ],
+     "required": [
+      "帳票ID",
+      "帳票名",
+      "形式"
+     ],
+     "hint": "システムが出力する帳票（PDF・Excelなど）",
+     "how": "人が書く",
+     "signals": [
+      {
+       "grep": "jasperreports|net\\.sf\\.jasperreports|org\\.apache\\.poi|itextpdf|com\\.lowagie|openpdf|reportlab",
+       "files": "**/*.{java,xml,gradle,kts,py,txt,toml}",
+       "label": "帳票ライブラリ（JasperReports・Apache POI・iText・OpenPDF・ReportLab）"
+      }
+     ]
+    },
+    {
+     "id": "BD-08",
+     "title": "バッチ一覧",
+     "kind": "manual-table",
+     "columns": [
+      "バッチID",
+      "バッチ名",
+      "起動条件",
+      "概要",
+      "入力",
+      "出力"
+     ],
+     "required": [
+      "バッチID",
+      "バッチ名",
+      "起動条件"
+     ],
+     "hint": "定期・随時に動く処理",
+     "how": "人が書く",
+     "signals": [
+      {
+       "grep": "@Scheduled|spring-batch|org\\.springframework\\.batch|quartz|@EnableScheduling",
+       "files": "**/*.{java,xml,gradle,kts}",
+       "label": "定期実行・バッチの仕組み（@Scheduled・Spring Batch・Quartz）"
+      },
+      {
+       "glob": "**/crontab*",
+       "label": "crontab"
+      },
+      {
+       "glob": "**/*.cron",
+       "label": "cron定義"
+      }
+     ]
+    },
+    {
+     "id": "BD-09",
+     "title": "外部インターフェース一覧",
+     "kind": "manual-table",
+     "columns": [
+      "IF ID",
+      "接続先",
+      "方式",
+      "方向",
+      "タイミング",
+      "概要"
+     ],
+     "required": [
+      "IF ID",
+      "接続先",
+      "方式",
+      "方向"
+     ],
+     "hint": "他システムとのやり取り（API・ファイル・メッセージ）",
+     "how": "人が書く",
+     "signals": [
+      {
+       "grep": "RestTemplate|WebClient|FeignClient|HttpClient\\.new|java\\.net\\.http|KafkaTemplate|RabbitTemplate|JmsTemplate|S3Client|SqsClient",
+       "files": "**/main/**/*.java",
+       "label": "外部との通信部品（RestTemplate・WebClient・Feign・HttpClient・Kafka・RabbitMQ・JMS・AWS SDK）"
+      }
+     ]
+    },
+    {
+     "id": "BD-10",
+     "title": "テーブル一覧",
+     "kind": "ledger-list",
+     "domain": "tables",
+     "fields": [
+      "title",
+      "summary",
+      "kind"
+     ],
+     "required": [
+      "title"
+     ],
+     "how": "台帳から（論理名・説明は人が書くか、DBのコメント・既存の設計書から取り込む）"
+    },
+    {
+     "id": "BD-11",
+     "title": "コード定義",
+     "kind": "manual-table",
+     "columns": [
+      "コード種別",
+      "コード値",
+      "名称",
+      "説明"
+     ],
+     "required": [
+      "コード種別",
+      "コード値",
+      "名称"
+     ],
+     "hint": "区分値・コード値の意味",
+     "how": "列挙型から下書きし、意味は人が書く",
+     "signals": [
+      {
+       "grep": "\\benum\\s+\\w+",
+       "files": "**/main/**/*.java",
+       "label": "列挙型（enum）"
+      }
+     ]
+    },
+    {
+     "id": "BD-12",
+     "title": "メッセージ一覧",
+     "kind": "manual-table",
+     "columns": [
+      "メッセージID",
+      "種別",
+      "文言"
+     ],
+     "required": [
+      "メッセージID",
+      "文言"
+     ],
+     "hint": "画面やログに出すメッセージ",
+     "how": "メッセージファイルから取り込める",
+     "signals": [
+      {
+       "glob": "**/messages*.properties",
+       "label": "メッセージファイル（messages*.properties）"
+      },
+      {
+       "glob": "**/i18n/**",
+       "label": "多言語リソース（i18n）"
+      }
+     ]
+    },
+    {
+     "id": "BD-13",
+     "title": "権限",
+     "kind": "manual-table",
+     "columns": [
+      "ロール",
+      "機能",
+      "権限"
+     ],
+     "required": [
+      "ロール",
+      "機能",
+      "権限"
+     ],
+     "hint": "ロールごとに使える機能",
+     "how": "人が書く",
+     "signals": [
+      {
+       "grep": "spring-security|@PreAuthorize|@Secured|hasRole\\(|SecurityFilterChain",
+       "files": "**/*.{java,xml,gradle,kts}",
+       "label": "認証・認可の仕組み（Spring Security・@PreAuthorize など）"
+      }
+     ]
+    },
+    {
+     "id": "BD-14",
+     "title": "非機能要件",
+     "kind": "manual-table",
+     "columns": [
+      "分類",
+      "項目",
+      "目標値",
+      "備考"
+     ],
+     "required": [
+      "分類",
+      "項目",
+      "目標値"
+     ],
+     "hint": "性能・可用性・拡張性・セキュリティ・運用保守・移行（IPA 非機能要求グレードを参考に）",
+     "how": "人が書く"
+    },
+    {
+     "id": "BD-15",
+     "title": "方式設計",
+     "kind": "text",
+     "hint": "アーキテクチャ、技術スタック、ログ・例外処理・トランザクション・排他制御・文字コード・日時の扱いの方針",
+     "how": "人が書く"
+    },
+    {
+     "id": "BD-16",
+     "title": "運用・移行の方針",
+     "kind": "text",
+     "hint": "運用の考え方（監視・バックアップ・障害対応）と、データ移行・切替の方針",
+     "how": "人が書く"
+    }
+   ]
+  },
+  {
+   "id": "DD",
+   "title": "詳細設計書",
+   "items": [
+    {
+     "id": "DD-01",
+     "title": "ソフトウェア構成",
+     "kind": "text",
+     "hint": "パッケージ・モジュールの構成と、それぞれの責務",
+     "how": "コードの構成から下書きし、人が確認する"
+    },
+    {
+     "id": "DD-02",
+     "title": "クラス一覧",
+     "kind": "manual-table",
+     "columns": [
+      "パッケージ",
+      "クラス",
+      "責務"
+     ],
+     "required": [
+      "パッケージ",
+      "クラス",
+      "責務"
+     ],
+     "hint": "主要なクラスと責務",
+     "how": "コードから下書きし、責務は人が確認する",
+     "signals": [
+      {
+       "glob": "**/main/**/*.java",
+       "label": "Javaのソース"
+      },
+      {
+       "glob": "**/src/**/*.py",
+       "label": "Pythonのソース"
+      },
+      {
+       "glob": "**/src/**/*.ts",
+       "label": "TypeScriptのソース"
+      }
+     ]
+    },
+    {
+     "id": "DD-03",
+     "title": "処理詳細",
+     "kind": "text",
+     "hint": "主要な処理の流れ、例外・エラー処理",
+     "how": "コードから下書き（推定）し、人が確認する"
+    },
+    {
+     "id": "DD-04",
+     "title": "API一覧",
+     "kind": "manual-table",
+     "columns": [
+      "API ID",
+      "メソッド",
+      "パス",
+      "概要",
+      "認可"
+     ],
+     "required": [
+      "メソッド",
+      "パス",
+      "概要"
+     ],
+     "hint": "外部に公開するAPI",
+     "how": "ルーティング・OpenAPIから取り込める",
+     "signals": [
+      {
+       "grep": "@RestController|@ResponseBody",
+       "files": "**/main/**/*.java",
+       "label": "APIコントローラ（@RestController・@ResponseBody）"
+      },
+      {
+       "glob": "**/openapi*.{yml,yaml,json}",
+       "label": "OpenAPI定義"
+      },
+      {
+       "glob": "**/swagger*.{yml,yaml,json}",
+       "label": "Swagger定義"
+      }
+     ]
+    },
+    {
+     "id": "DD-05",
+     "title": "画面項目・入力チェック",
+     "kind": "manual-table",
+     "columns": [
+      "画面ID",
+      "項目名",
+      "型",
+      "桁",
+      "必須",
+      "チェック内容",
+      "メッセージID"
+     ],
+     "required": [
+      "画面ID",
+      "項目名",
+      "必須",
+      "チェック内容"
+     ],
+     "hint": "画面の入力項目と、入力チェックの内容",
+     "how": "フォーム定義・Validatorから下書きできる",
+     "signals": [
+      {
+       "grep": "@NotBlank|@NotNull|@Size|@Pattern|Validator\\b",
+       "files": "**/main/**/*.java",
+       "label": "入力チェック（@NotBlank・@Size・Validator など）"
+      }
+     ]
+    },
+    {
+     "id": "DD-06",
+     "title": "テーブル定義",
+     "kind": "ref",
+     "document": "TD",
+     "how": "テーブル定義書（別冊）を参照"
+    },
+    {
+     "id": "DD-07",
+     "title": "データアクセス・トランザクション",
+     "kind": "text",
+     "hint": "主要なSQL、トランザクション境界、排他制御（楽観・悲観）",
+     "how": "人が書く",
+     "signals": [
+      {
+       "grep": "@Transactional|Repository\\b",
+       "files": "**/main/**/*.java",
+       "label": "トランザクション・リポジトリ（@Transactional・Repository）"
+      }
+     ]
+    },
+    {
+     "id": "DD-08",
+     "title": "バッチ詳細",
+     "kind": "text",
+     "hint": "ジョブの流れ、再実行・リカバリ、処理件数と時間の見積り",
+     "how": "人が書く",
+     "signals": [
+      {
+       "grep": "@Scheduled|spring-batch|org\\.springframework\\.batch|quartz|@EnableScheduling",
+       "files": "**/*.{java,xml,gradle,kts}",
+       "label": "定期実行・バッチの仕組み（@Scheduled・Spring Batch・Quartz）"
+      },
+      {
+       "glob": "**/crontab*",
+       "label": "crontab"
+      },
+      {
+       "glob": "**/*.cron",
+       "label": "cron定義"
+      }
+     ]
+    },
+    {
+     "id": "DD-09",
+     "title": "インターフェース詳細",
+     "kind": "text",
+     "hint": "電文・ファイルのレイアウト、文字コード、変換仕様、エラー時の扱い",
+     "how": "人が書く",
+     "signals": [
+      {
+       "grep": "RestTemplate|WebClient|FeignClient|HttpClient\\.new|java\\.net\\.http|KafkaTemplate|RabbitTemplate|JmsTemplate|S3Client|SqsClient",
+       "files": "**/main/**/*.java",
+       "label": "外部との通信部品（RestTemplate・WebClient・Feign・HttpClient・Kafka・RabbitMQ・JMS・AWS SDK）"
+      }
+     ]
+    },
+    {
+     "id": "DD-10",
+     "title": "ログ出力仕様",
+     "kind": "manual-table",
+     "columns": [
+      "ログ種別",
+      "出力契機",
+      "レベル",
+      "出力項目"
+     ],
+     "required": [
+      "ログ種別",
+      "出力契機",
+      "レベル"
+     ],
+     "hint": "ログの種類と出力内容",
+     "how": "人が書く"
+    },
+    {
+     "id": "DD-11",
+     "title": "設定値一覧",
+     "kind": "manual-table",
+     "columns": [
+      "名称",
+      "種別",
+      "値・内容",
+      "説明"
+     ],
+     "required": [
+      "名称",
+      "値・内容"
+     ],
+     "hint": "設定ファイルの主要な設定値",
+     "how": "設定ファイルから取り込める",
+     "signals": [
+      {
+       "glob": "**/application*.properties",
+       "label": "設定ファイル（application.properties）"
+      },
+      {
+       "glob": "**/application*.yml",
+       "label": "設定ファイル（application.yml）"
+      },
+      {
+       "glob": "**/application*.yaml",
+       "label": "設定ファイル（application.yaml）"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "TD",
+   "title": "テーブル定義書",
+   "items": [
+    {
+     "id": "TD-01",
+     "title": "テーブル一覧",
+     "kind": "ledger-list",
+     "domain": "tables",
+     "fields": [
+      "title",
+      "summary",
+      "kind",
+      "volume"
+     ],
+     "required": [
+      "title"
+     ],
+     "how": "台帳から"
+    },
+    {
+     "id": "TD-02",
+     "title": "テーブル定義",
+     "kind": "ledger-table",
+     "domain": "tables",
+     "container_fields": [
+      "title",
+      "summary",
+      "unique",
+      "indexes"
+     ],
+     "container_required": [
+      "title"
+     ],
+     "fields": [
+      "logical_name",
+      "base_type",
+      "length",
+      "scale",
+      "nullable",
+      "default",
+      "pk",
+      "fk",
+      "indexed",
+      "identity",
+      "description"
+     ],
+     "required": [
+      "logical_name",
+      "base_type",
+      "nullable",
+      "pk"
+     ],
+     "how": "台帳から（論理名・説明は人が書くか、DBのコメント・既存の設計書から取り込む）"
+    }
+   ]
+  },
+  {
+   "id": "TS",
+   "title": "テスト仕様書",
+   "items": [
+    {
+     "id": "TS-01",
+     "title": "テストクラス一覧",
+     "kind": "ledger-list",
+     "domain": "tests",
+     "fields": [
+      "level",
+      "summary"
+     ],
+     "required": [
+      "level",
+      "summary"
+     ],
+     "how": "台帳から（テストレベル・目的は人が書くか、仕様書から取り込む）"
+    },
+    {
+     "id": "TS-02",
+     "title": "テストケース",
+     "kind": "ledger-table",
+     "domain": "tests",
+     "container_fields": [
+      "level",
+      "summary"
+     ],
+     "container_required": [],
+     "fields": [
+      "category",
+      "purpose",
+      "precondition",
+      "steps",
+      "expected",
+      "result",
+      "free:対象"
+     ],
+     "required": [
+      "category",
+      "purpose",
+      "expected"
+     ],
+     "how": "台帳から（前提条件・手順・期待結果は人が書くか、仕様書から取り込む）"
+    }
+   ]
+  }
+ ]
+}

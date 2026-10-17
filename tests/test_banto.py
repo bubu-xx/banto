@@ -132,6 +132,19 @@ def _w(base, rel, text):
     fio.write(os.path.join(base, rel), text)
 
 
+def _set_cell(path, row_key, header, value):
+    """台帳MDの表で、row_key を含む行の、見出し header の列を書き換える。"""
+    text = fio.read(path)
+    lines = text.splitlines()
+    head = next(ln for ln in lines if ln.startswith("| ID |"))
+    idx = [h.strip() for h in head.split("|")].index(header)
+    n = next(i for i, ln in enumerate(lines) if row_key in ln)
+    cells = lines[n].split("|")
+    cells[idx] = f" {value} "
+    lines[n] = "|".join(cells)
+    fio.write(path, "\n".join(lines) + "\n")
+
+
 def _run(*args):
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -139,10 +152,15 @@ def _run(*args):
             code = main(list(args))
         except SystemExit as e:
             code = e.code
+            if isinstance(code, str):
+                err.write(code)
+                code = 1
     return code, out.getvalue() + err.getvalue()
 
 
-class BantoTest(unittest.TestCase):
+class ProjectCase(unittest.TestCase):
+    """架空のプロジェクトを一時フォルダに作る土台（テストそのものは持たない）。"""
+
     def setUp(self):
         self.p = tempfile.mkdtemp(prefix="banto-")
         _w(self.p, "db/a.sql", DDL_A)
@@ -178,6 +196,9 @@ class BantoTest(unittest.TestCase):
                     out[os.path.relpath(p, self.p)] = fh.read()
         return out
 
+
+
+class BantoTest(ProjectCase):
     # ------------------------------------------------------------ 抽出
     def test_extract(self):
         src = engine.extract_all(self.p)
@@ -271,12 +292,7 @@ class BantoTest(unittest.TestCase):
 
     def test_ledger_hand_edit_creates_drift(self):
         self.sync()
-        p = os.path.join(self.p, "banto/design/detail/tables/users.md")
-        text = fio.read(p)
-        line = next(ln for ln in text.splitlines() if "`name`" in ln)
-        cells = line.split("|")
-        cells[4] = " 40 "     # 長さ 30 → 40（設計変更）
-        fio.write(p, text.replace(line, "|".join(cells)))
+        _set_cell(os.path.join(self.p, "banto/design/detail/tables/users.md"), "`name`", "長さ", "40")  # 設計変更
         res = self.sync()
         d = self.drift(res, "users", "name", "length")
         self.assertEqual(d.status, "open")
@@ -336,7 +352,7 @@ class BantoTest(unittest.TestCase):
         code, out = _run("--project", self.p, "export")
         self.assertEqual(code, 0, out)
         ex = os.path.join(self.p, "banto/export")
-        wb = openpyxl.load_workbook(os.path.join(ex, "tables.xlsx"))
+        wb = openpyxl.load_workbook(os.path.join(ex, "TD_テーブル定義書.xlsx"))
         self.assertIn("users", wb.sheetnames)
         self.assertTrue(wb["users"].protection.sheet)
         rv = next(f for f in os.listdir(ex) if f.startswith("review-"))
@@ -363,12 +379,7 @@ class BantoTest(unittest.TestCase):
         self.sync()
         self.assertEqual(_run("--project", self.p, "check")[0], 0)
         self.assertEqual(_run("--project", self.p, "check", "--strict")[0], 1)
-        p = os.path.join(self.p, "banto/tests/UserTests.md")
-        text = fio.read(p)
-        line = next(ln for ln in text.splitlines() if "`createsUser`" in ln)
-        cells = line.split("|")
-        cells[-3] = " COL-999 "
-        fio.write(p, text.replace(line, "|".join(cells)))
+        _set_cell(os.path.join(self.p, "banto/tests/UserTests.md"), "`createsUser`", "対象", "COL-999")
         code, out = _run("--project", self.p, "check")
         self.assertEqual(code, 1, out)
         self.assertIn("COL-999", out)

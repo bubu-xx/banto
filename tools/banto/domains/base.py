@@ -87,6 +87,18 @@ class Domain:
     exists_severity: str
     attrs: dict = field(default_factory=dict)
     free_columns: tuple = ()     # 台帳にだけある人が書く列（例: テストの「対象」）
+    base_free: tuple = None      # 領域が既定で持つ「人が書く列」（案件の追加列を足す前）
+
+    def configure(self, extra=()):
+        """案件独自の「人が書く列」（project.json の extra_columns）を足す。"""
+        if self.base_free is None:
+            self.base_free = tuple(self.free_columns)
+        cols = list(self.base_free)
+        taken = {a.label for a in self.attrs.values()} | {"ID", self.item_label, "状態"}
+        for c in extra or ():
+            if c not in cols and c not in taken:
+                cols.append(c)
+        self.free_columns = tuple(cols)
 
     def item_attrs(self):
         return [a for a in self.attrs.values() if a.scope == "item"]

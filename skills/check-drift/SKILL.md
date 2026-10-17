@@ -15,7 +15,7 @@ Windows では `python3` を `python` に置き換える。以下 `banto <コマ
 
 ## 手順
 
-1. `banto sync` を実行する。台帳・判断票・一覧（`banto/drifts/README.md`）・直し待ちリスト（`banto/drifts/APPLY.md`）が更新される。
+1. `banto sync` を実行する。台帳・判断票・一覧（`banto/drifts/README.md`）・直し待ちリスト（`banto/drifts/APPLY.md`）・網羅表（`banto/coverage/README.md`）が更新される。
 2. `banto check` で記録の整合を確かめる（IDの鎖が切れていないか、判断の記録に誤りがないか）。CIでは `banto check --strict` を使う（未判断・直し待ちが残っていれば失敗）。
 3. 前回からの変化を報告する：
    - 新しく **未判断** になったもの（台帳と実物が食い違った）

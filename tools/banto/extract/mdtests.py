@@ -35,7 +35,7 @@ def result_value(text):
     return None
 
 
-def extract(src, text, columns):
+def extract(src, text, columns, sections=None):
     lines = text.splitlines()
     current, i = None, 0
     while i < len(lines):
@@ -46,6 +46,18 @@ def extract(src, text, columns):
                 current = (m.group(1), i + 1, level)
             elif current and level <= current[2]:
                 current = None   # 同じか上の階層の見出しで、クラスの節が終わる
+            elif current and sections:
+                # クラスの節の中の小見出し（例:「### 目的」）の本文を、コンテナの属性として取り出す
+                title = lines[i].lstrip("#").strip()
+                if title in sections:
+                    body, j = [], i + 1
+                    while j < len(lines) and not HEADING.match(lines[j]) and not lines[j].lstrip().startswith("|"):
+                        if lines[j].strip() and lines[j].strip() != "---":
+                            body.append(lines[j].strip())
+                        j += 1
+                    if body:
+                        cont = src.container(current[0], f"{src.path}:{current[1]}")
+                        cont.set(sections[title], " ".join(body), " ".join(body), f"{src.path}:{i + 1}")
         elif lines[i].lstrip().startswith("|") and current and cells(lines[i])[0] in METHOD_HEADERS:
             header = cells(lines[i])
             cont = src.container(current[0], f"{src.path}:{current[1]}")

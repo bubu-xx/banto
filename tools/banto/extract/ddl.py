@@ -38,13 +38,13 @@ def _cols(s):
     return [c.strip().strip('`"').lower() for c in s.split(",") if c.strip()]
 
 
-def extract(src, text, dialect):
+def extract(src, text, dialect, comment_as="logical_name"):
     sql = _strip_comments(text)
 
     def line(off):
         return f"{src.path}:{sql.count(chr(10), 0, off) + 1}"
 
-    uniques = {}
+    uniques, indexes = {}, {}
     for m in re.finditer(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`\"]?(\w+)[`\"]?\s*\(", sql, re.I):
         depth, i = 1, m.end()
         while depth and i < len(sql):
@@ -53,22 +53,28 @@ def extract(src, text, dialect):
         body_start, body = m.end(), sql[m.end():i - 1]
         t = src.container(m.group(1).lower(), line(m.start()))
         uniques.setdefault(t.name, [])
+        indexes.setdefault(t.name, [])
+        opts = sql[i:sql.find(";", i) if sql.find(";", i) >= 0 else len(sql)]
+        cm_ = re.search(r"COMMENT\s*=?\s*'((?:[^']|'')*)'", opts, re.I)
+        if cm_:
+            t.set("title" if comment_as == "logical_name" else "summary", cm_.group(1).replace("''", "'"),
+                  f"COMMENT '{cm_.group(1)}'", line(m.start()))
         for item, off in _split_top(body):
             s = item.strip()
             if not s:
                 continue
             iloc = line(body_start + off + (len(item) - len(item.lstrip())))
             if re.match(r"(PRIMARY\s+KEY|CONSTRAINT|FOREIGN\s+KEY|INDEX|KEY|UNIQUE)\b", s, re.I):
-                _constraint(t, s, iloc, uniques)
+                _constraint(t, s, iloc, uniques, indexes)
                 continue
-            cm = re.match(r"[`\"]?(\w+)[`\"]?\s+([A-Za-z_]+(?:\s*\(\s*\d+\s*\))?)(.*)", s, re.S)
+            cm = re.match(r"[`\"]?(\w+)[`\"]?\s+([A-Za-z_]+(?:\s*\(\s*\d+\s*(?:,\s*\d+\s*)?\))?)(.*)", s, re.S)
             if cm:
-                _column(t, cm.group(1).lower(), cm.group(2), cm.group(3), iloc, dialect)
+                _column(t, cm.group(1).lower(), cm.group(2), cm.group(3), iloc, dialect, comment_as)
 
     for m in re.finditer(r"ALTER\s+TABLE\s+[`\"]?(\w+)[`\"]?\s+ADD\s+(.*?)(?:;|$)", sql, re.I | re.S):
         t = src.containers.get(m.group(1).lower())
         if t:
-            _constraint(t, m.group(2), line(m.start()), uniques)
+            _constraint(t, m.group(2), line(m.start()), uniques, indexes)
 
     for m in re.finditer(r"CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[`\"]?(\w+)[`\"]?\s+)?ON\s+[`\"]?(\w+)[`\"]?\s*\(([^)]*)\)", sql, re.I):
         t = src.containers.get(m.group(3).lower())
@@ -77,11 +83,30 @@ def extract(src, text, dialect):
         cols = _cols(m.group(4))
         if m.group(1):
             uniques[t.name].append((cols, line(m.start())))
+        elif len(cols) > 1:
+            indexes[t.name].append((cols, line(m.start())))
         c = t.items.get(cols[0])
         if c:
             c.set("indexed", True, f"INDEX {m.group(2) or '（名前なし）'}", line(m.start()))
 
+    for m in re.finditer(r"COMMENT\s+ON\s+(TABLE|COLUMN)\s+([\w.\"`]+)\s+IS\s+'((?:[^']|'')*)'", sql, re.I):
+        parts = [x.strip('"`').lower() for x in m.group(2).split(".")]
+        text = m.group(3).replace("''", "'")
+        if m.group(1).upper() == "TABLE":
+            t = src.containers.get(parts[-1])
+            if t:
+                t.set("title" if comment_as == "logical_name" else "summary", text, f"COMMENT ON TABLE '{text}'", line(m.start()))
+        elif len(parts) >= 2:
+            t = src.containers.get(parts[-2])
+            c = t.items.get(parts[-1]) if t else None
+            if c:
+                c.set(comment_as, text, f"COMMENT ON COLUMN '{text}'", line(m.start()))
+
     for t in src.containers.values():
+        ix = sorted(indexes.get(t.name, []))
+        t.set("indexes", "、".join("(" + ", ".join(k) + ")" for k, _ in ix),
+              "、".join("INDEX(" + ", ".join(k) + ")" for k, _ in ix) or "複合インデックスなし",
+              ix[0][1] if ix else t.loc)
         for c in t.items.values():
             pk = c.attrs.get("pk")
             if "indexed" not in c.attrs and not (pk and pk.value):
@@ -94,9 +119,21 @@ def extract(src, text, dialect):
               u[0][1] if u else t.loc)
 
 
-def _column(t, cname, raw, rest, loc, dialect):
+def _column(t, cname, raw, rest, loc, dialect, comment_as="logical_name"):
     c = t.item(cname, loc)
     ty = sqltype.parse(raw)
+    if ty["base"] == "decimal":
+        c.set("length", ty["length"], raw.strip())
+        c.set("scale", ty["scale"], raw.strip())
+    plain = re.sub(r"GENERATED\s+(?:ALWAYS|BY\s+DEFAULT)\s+AS\s+IDENTITY", "", rest, flags=re.I)
+    dm = re.search(r"\bDEFAULT\s+('(?:[^']|'')*'|\([^)]*\)|[^\s,]+(?:\(\))?)", plain, re.I)
+    dv = dm.group(1).strip("'").replace("''", "'") if dm else ""
+    if dv.upper() == "NULL":
+        dv = ""
+    c.set("default", dv, f"DEFAULT {dm.group(1)}" if dm else "DEFAULT指定なし")
+    cmm = re.search(r"\bCOMMENT\s+'((?:[^']|'')*)'", rest, re.I)
+    if cmm:
+        c.set(comment_as, cmm.group(1).replace("''", "'"), f"COMMENT '{cmm.group(1)}'")
     uns = bool(re.search(r"\bUNSIGNED\b", rest, re.I))
     shown = re.sub(r"\s+", " ", raw.strip()) + (" UNSIGNED" if uns else "")
     c.set("base_type", ty["base"], shown)
@@ -119,7 +156,7 @@ def _column(t, cname, raw, rest, loc, dialect):
         c.set("fk", tgt, f"REFERENCES {tgt}")
 
 
-def _constraint(t, s, loc, uniques):
+def _constraint(t, s, loc, uniques, indexes=None):
     s = re.sub(r"^\s*CONSTRAINT\s+\w+\s+", "", s.strip(), flags=re.I)
     m = re.match(r"FOREIGN\s+KEY\s*\(([^)]*)\)\s*REFERENCES\s+[`\"]?(\w+)[`\"]?\s*\(([^)]*)\)", s, re.I)
     if m:
@@ -134,7 +171,10 @@ def _constraint(t, s, loc, uniques):
         return
     m = re.match(r"(?:INDEX|KEY)\s*\w*\s*\(([^)]*)\)", s, re.I)
     if m:
-        c = t.items.get(_cols(m.group(1))[0])
+        cols = _cols(m.group(1))
+        if len(cols) > 1 and indexes is not None:
+            indexes.setdefault(t.name, []).append((cols, loc))
+        c = t.items.get(cols[0])
         if c:
             c.set("indexed", True, "INDEX（名前なし）", loc)
         return

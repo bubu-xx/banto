@@ -22,11 +22,14 @@ Windows では `python3` を `python` に置き換える。以下 `banto <コマ
    - グループをまとめて：`banto decide --group "<グループ>" --allow --value × --by <名前> --reason "<理由>"`
    - 有無：`--set あり` / `--set なし` / `--allow --value あり`（範囲外として許容）
    - レビュー指摘：`--accept`（台帳を直すなら `--target <ID> --attr <属性名> --set <値>`）/ `--reject` / `--answer`
+   - 様式の項目の要・不要：`banto decide --item BD-07 --exclude --by <名前> --reason "<理由>"`（必要なら `--include`）
 3. **結果を伝える**：コマンドが各ずれの状態を表示する。`decided`（直し待ち）なら `banto/drifts/APPLY.md` に作業が出る。
 4. **実物を直す**：APPLY.md の作業を `applier` エージェントに渡す（コードやDDLを変えるので、着手前にユーザーの了承を取る）。直したら `banto sync`。
 5. **確認する**：`auditor` エージェントに、判断どおりに直ったか、新しいずれが出ていないかを確認させる。
 
-属性名（`--attr`）：テーブルは `base_type` `length` `nullable` `pk` `fk` `indexed` `identity` `case_insensitive` `unsigned` `unique`、テストは `category` `purpose` `result`。
+属性名（`--attr`）：テーブルの列は `logical_name` `base_type` `length` `scale` `nullable` `default` `pk` `fk` `indexed` `identity` `case_insensitive` `unsigned` `description`、テーブルは `title` `summary` `kind` `volume` `unique` `indexes`。テストは `category` `purpose` `precondition` `steps` `expected` `result`、テストクラスは `level` `summary`。
+
+判断者が project.json に登録されていれば、判断者の名前でしか記録できない。
 
 ## ルール
 

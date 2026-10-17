@@ -1,22 +1,31 @@
 """banto — 成果物の関係をMDの台帳で管理し、ずれを判断票にする。
 
 使い方（対象プロジェクトのフォルダで実行するか、--project で指定する）:
-  banto sync                      情報源を読み、台帳・判断票・一覧を更新する
+  banto init                      案件の設定（project.json）と情報源の一覧のひな形を作る
+  banto sync                      情報源を読み、台帳・判断票・一覧・網羅表を更新する
   banto status                    ずれの件数を表示する
   banto decide DRF-0001 --set 20 --by 名前 --reason 理由
   banto decide --group "<グループ>" --allow --by 名前 --reason 理由
   banto decide DRF-0050 --accept|--reject|--answer --by 名前 --reason 内容   （レビュー指摘）
+  banto coverage                  網羅表を更新する（様式の各項目が、充足・情報不足・不要の候補か）
+  banto decide --item BD-07 --exclude|--include --by 名前 --reason 理由   （様式の項目の要・不要）
   banto check [--strict]          IDの鎖と記録の整合を検査する（--strict は未判断・直し待ちも失敗にする）
-  banto export [--out DIR]        台帳からExcel（設計書・テスト仕様書）と空のレビュー表を出す
+  banto export [--doc TD] [--out DIR]  様式どおりのExcel（基本設計書・詳細設計書・テーブル定義書・テスト仕様書）と空のレビュー表を出す
+  banto release TD --by 承認者 --reason 理由 [--allow-open]   文書の版を提出版として確定する
   banto import-review FILE.xlsx   記入済みのレビュー表を取り込み、指摘を判断票にする
+  banto format read 様式.xlsx --name 顧客様式   専用様式の構造を読み、配置の下書きを作る（以後 trial / confirm / map）
 """
 import argparse
 import os
 import sys
 
 
+def _root(a):
+    return os.path.abspath(a.project or os.environ.get("BANTO_PROJECT") or os.getcwd())
+
+
 def _project(a):
-    p = os.path.abspath(a.project or os.environ.get("BANTO_PROJECT") or os.getcwd())
+    p = _root(a)
     if not os.path.exists(os.path.join(p, "banto", "sources.json")):
         sys.exit(f"banto/sources.json が見つからない: {p}\n対象プロジェクトのフォルダで実行するか、--project で指定してください。")
     return p
@@ -42,6 +51,33 @@ def cmd_sync(a):
     return 1 if res.errors else 0
 
 
+def cmd_init(a):
+    import json
+    from . import project as PJ, fio
+    root = _root(a)
+    base = os.path.join(root, "banto")
+    made = []
+    if not os.path.exists(PJ.path(base)):
+        cfg = json.loads(json.dumps(PJ.DEFAULT))
+        cfg.update(system=a.system or os.path.basename(root), project=a.name or "", customer=a.customer or "")
+        if a.judge or a.approver:
+            people = {}
+            for n in a.judge or []:
+                people.setdefault(n, set()).add("judge")
+            for n in a.approver or []:
+                people.setdefault(n, set()).add("approver")
+            cfg["people"] = [{"name": n, "roles": sorted(r)} for n, r in people.items()]
+        PJ.save(base, cfg)
+        made.append("banto/project.json")
+    src = os.path.join(base, "sources.json")
+    if not os.path.exists(src):
+        fio.write(src, json.dumps({"domains": {"tables": [], "tests": []}}, ensure_ascii=False, indent=2) + "\n")
+        made.append("banto/sources.json")
+    print("作成しました: " + "、".join(made) if made else "すでに準備済みです（既存のファイルは変更していません）")
+    print("次に: sources.json に情報源を書き、banto sync を実行してください")
+    return 0
+
+
 def cmd_status(a):
     from . import engine
     res = engine.sync(_project(a), write=False)
@@ -58,6 +94,8 @@ def cmd_decide(a):
     st = State(base)
     reg = st.drifts
     by_id = st.by_drift_id()
+    if a.item:
+        return _decide_item(a, project, base, st)
     ids = list(a.drifts)
     if a.group:
         ids += [e["id"] for k, e in sorted(reg.items(), key=lambda kv: kv[1]["id"])
@@ -74,6 +112,10 @@ def cmd_decide(a):
         sys.exit("--set / --allow / --accept / --reject / --answer のどれかを指定してください")
     if not a.by or not a.reason:
         sys.exit("--by（判断した人）と --reason（理由）は必須です。理由は次の判断の材料になります")
+    from . import project as PJ
+    err = PJ.check_role(PJ.load(base), a.by, "judge")
+    if err:
+        sys.exit(err)
     value = a.set if action == "set" else (a.value or "")
     for did in ids:
         k = by_id.get(did)
@@ -123,6 +165,51 @@ def cmd_decide(a):
     return 1 if res.errors else 0
 
 
+def _decide_item(a, project, base, st):
+    """様式の項目が、このシステムに必要か不要かの判断を記録する。"""
+    from . import engine, decisions as D, formats, project as PJ
+    if bool(a.exclude) == bool(a.include):
+        sys.exit("--item には --exclude（不要）か --include（必要）のどちらか一方を指定してください")
+    if not a.by or not a.reason:
+        sys.exit("--by（判断した人）と --reason（理由）は必須です")
+    cfg = PJ.load(base)
+    err = PJ.check_role(cfg, a.by, "judge")
+    if err:
+        sys.exit(err)
+    known = formats.item_ids(formats.load(base, cfg.get("format", "standard")))
+    if a.item not in known:
+        sys.exit(f"{a.item} は様式の項目にない（banto/coverage/README.md を参照）")
+    existing = [f[:-3] for f in os.listdir(os.path.join(base, "decisions"))] if os.path.isdir(os.path.join(base, "decisions")) else []
+    action = "exclude" if a.exclude else "include"
+    dec = D.Decision(st.dec_id([x for x in existing if x.startswith("DEC-")]), [], action, "", a.item, "", a.rule or "",
+                     a.by, "", a.reason)
+    doc, it = known[a.item]
+    D.write(base, dec, f"対象：{doc['title']} {a.item} {it['title']}（{'不要' if a.exclude else '必要'}）")
+    print(f"{dec.id} を記録しました：{a.item} {it['title']} を{'不要' if a.exclude else '必要'}と判断")
+    res = engine.sync(project)
+    c = next((c for c in res.coverage if c.id == a.item), None)
+    if c:
+        print(f"  {a.item}: {c.applicability}・{c.sufficiency}")
+    return 0
+
+
+def cmd_coverage(a):
+    from . import engine
+    res = engine.sync(_project(a))
+    for e in res.errors:
+        print(f"[誤り] {e}", file=sys.stderr)
+    from collections import Counter
+    n = Counter("不要" if not c.needed else c.sufficiency for c in res.coverage)
+    cand = sum(1 for c in res.coverage if c.applicability == "不要の候補")
+    print(f"網羅表を更新しました（banto/coverage/README.md）：充足 {n['充足']}・情報不足 {n['情報不足']}・"
+          f"参照 {n['参照']}・不要の候補 {cand}・不要（判断済み） {n['不要'] - cand}")
+    for c in res.coverage:
+        if c.applicability == "不要の候補" or (c.needed and c.sufficiency == "情報不足"):
+            what = c.applicability if c.applicability == "不要の候補" else "、".join(c.details)
+            print(f"  {c.id} {c.item['title']}: {what}")
+    return 0
+
+
 def cmd_check(a):
     from . import check
     return check.run(_project(a), strict=a.strict)
@@ -131,8 +218,53 @@ def cmd_check(a):
 def cmd_export(a):
     from . import excel
     project = _project(a)
-    for p in excel.export(project, a.out):
+    for p in excel.export(project, a.out, a.doc):
         print(f"出力: {os.path.relpath(p, project)}")
+    return 0
+
+
+def cmd_release(a):
+    from . import release
+    if not a.by or not a.reason:
+        sys.exit("--by（承認者）と --reason（承認の理由・条件）は必須です")
+    code, msg = release.run(_project(a), a.doc, a.by, a.reason, a.allow_open)
+    print(msg, file=sys.stderr if code else sys.stdout)
+    return code
+
+
+def cmd_format(a):
+    from . import custom, engine, project as PJ
+    root = _root(a)
+    base = os.path.join(root, "banto")
+    if a.action == "read":
+        if not a.file:
+            sys.exit("様式のExcelファイルを指定してください：banto format read <様式.xlsx> --name <名前>")
+        lay = custom.read(base, a.file, a.name)
+        d = os.path.relpath(custom.fdir(base, a.name), root)
+        print(f"読み取りました：{d}/STRUCTURE.md（構造）、{d}/layout.json（配置の下書き）")
+        for s in lay["sheets"]:
+            print(f"  シート「{s['sheet']}」：役割 {s['role']}、欄 {len(s['fields'])}、表 {len(s['tables'])}")
+        for q in lay["questions"]:
+            print(f"  確認したいこと：{q}")
+        print("次に：banto format trial で試し刷りを作り、配置を確かめてください")
+    elif a.action == "trial":
+        res = engine.sync(_project(a)) if a.data else None
+        p = custom.trial(base, a.name, a.data, res)
+        print(f"試し刷り：{os.path.relpath(p, root)}")
+    elif a.action == "map":
+        doc = {"id": a.doc_id or "CX", "title": a.doc_title or a.name}
+        mp = custom.map_draft(base, a.name, doc)
+        print(f"対応づけの下書き：{os.path.relpath(os.path.join(custom.fdir(base, a.name), 'mapping.json'), root)}")
+        for u in mp["unmapped"]:
+            print(f"  要確認：{u}")
+    elif a.action == "confirm":
+        if not a.by:
+            sys.exit("--by（確かめた人）は必須です")
+        custom.confirm(base, a.name, a.step, a.by)
+        print(f"{a.step} を確定しました（{a.by}）")
+        if a.step == "mapping":
+            cfg = PJ.load(base)
+            print(f"この様式で出力するには project.json の format を \"custom:{a.name}\" にしてください（いま：{cfg.get('format')}）")
     return 0
 
 
@@ -156,6 +288,13 @@ def main(argv=None):
         s = sp.add_parser(name, help="台帳・判断票を更新する")
         s.add_argument("path", nargs="?")
         s.set_defaults(func=cmd_sync)
+    s = sp.add_parser("init", help="案件の設定と情報源の一覧のひな形を作る")
+    s.add_argument("--system")
+    s.add_argument("--name")
+    s.add_argument("--customer")
+    s.add_argument("--judge", action="append")
+    s.add_argument("--approver", action="append")
+    s.set_defaults(func=cmd_init)
     s = sp.add_parser("status")
     s.add_argument("path", nargs="?")
     s.set_defaults(func=cmd_status)
@@ -173,13 +312,36 @@ def main(argv=None):
     s.add_argument("--by")
     s.add_argument("--reason")
     s.add_argument("--rule")
+    s.add_argument("--item", help="様式の項目ID（--exclude / --include と使う）")
+    s.add_argument("--exclude", action="store_true")
+    s.add_argument("--include", action="store_true")
     s.set_defaults(func=cmd_decide)
+    s = sp.add_parser("coverage", help="網羅表（設計書を作る情報が揃っているか）を更新して表示する")
+    s.add_argument("path", nargs="?")
+    s.set_defaults(func=cmd_coverage)
     s = sp.add_parser("check")
     s.add_argument("--strict", action="store_true")
     s.set_defaults(func=cmd_check)
     s = sp.add_parser("export")
     s.add_argument("--out")
+    s.add_argument("--doc", action="append", help="出力する文書のID（BD・DD・TD・TS など。省略時はすべて）")
     s.set_defaults(func=cmd_export)
+    s = sp.add_parser("release", help="文書の版を提出版として確定する（承認者）")
+    s.add_argument("doc")
+    s.add_argument("--by")
+    s.add_argument("--reason")
+    s.add_argument("--allow-open", action="store_true")
+    s.set_defaults(func=cmd_release)
+    s = sp.add_parser("format", help="専用様式の取り込み（read → trial → confirm layout → map → confirm mapping）")
+    s.add_argument("action", choices=["read", "trial", "map", "confirm"])
+    s.add_argument("file", nargs="?")
+    s.add_argument("--name", required=True)
+    s.add_argument("--data", action="store_true", help="trial：実際の値を入れて試し刷りする（対応づけの確認用）")
+    s.add_argument("--step", choices=["layout", "mapping"], default="layout")
+    s.add_argument("--by")
+    s.add_argument("--doc-id")
+    s.add_argument("--doc-title")
+    s.set_defaults(func=cmd_format)
     s = sp.add_parser("import-review")
     s.add_argument("file")
     s.set_defaults(func=cmd_import_review)
